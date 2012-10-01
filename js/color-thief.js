@@ -26,19 +26,18 @@
   It also simplifies some of the canvas context manipulation
   with a set of helper functions.
 */
-var CanvasImage = function (image) {
-    // If jquery object is passed in, get html element
-    imgEl = (image.jquery) ? image[0] : image;
 
-    this.canvas = document.createElement('canvas');
-    this.context = this.canvas.getContext('2d');
+var Canvas = require('canvas')
+var quantize = require('./libs/quantize.js')
 
-    document.body.appendChild(this.canvas);
+var CanvasImage = function (img) {
+    this.canvas = new Canvas(img.width, img.height)
+    this.context = this.canvas.getContext('2d')
 
-    this.width = this.canvas.width = imgEl.width;
-    this.height = this.canvas.height = imgEl.height;
+    this.width = img.width;
+    this.height = img.height;
 
-    this.context.drawImage(imgEl, 0, 0, this.width, this.height);
+    this.context.drawImage(img, 0, 0, this.width, this.height);
 };
 
 CanvasImage.prototype.clear = function () {
@@ -58,7 +57,7 @@ CanvasImage.prototype.getImageData = function () {
 };
 
 CanvasImage.prototype.removeCanvas = function () {
-    $(this.canvas).remove();
+    //$(this.canvas).remove();
 };
 
 
@@ -113,7 +112,7 @@ function createPalette(sourceImage, colorCount) {
     // Send array to quantize function which clusters values
     // using median cut algorithm
 
-    var cmap = MMCQ.quantize(pixelArray, colorCount);
+    var cmap = quantize(pixelArray, colorCount);
     var palette = cmap.palette();
 
     // Clean up
@@ -226,3 +225,5 @@ function createAreaBasedPalette(sourceImage, colorCount) {
 
     return palette;
 }
+
+module.exports.getDominantColor = getDominantColor

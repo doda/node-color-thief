@@ -386,7 +386,7 @@ var MMCQ = (function() {
     function quantize(pixels, maxcolors) {
         // short-circuit
         if (!pixels.length || maxcolors < 2 || maxcolors > 256) {
-//            console.log('wrong number of maxcolors');
+            console.log('wrong number of maxcolors');
             return false;
         }
         
@@ -469,3 +469,5 @@ var MMCQ = (function() {
         quantize: quantize
     }
 })();
+
+module.exports = MMCQ.quantize
