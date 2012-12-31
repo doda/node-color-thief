@@ -227,3 +227,4 @@ function createAreaBasedPalette(sourceImage, colorCount) {
 }
 
 module.exports.getDominantColor = getDominantColor
+module.exports.createPalette = createPalette
