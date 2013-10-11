@@ -1,5 +1,5 @@
 /*
- * Color Thief v1.0
+ * Color Thief v2.0
  * by Lokesh Dhakar - http://www.lokeshdhakar.com
  *
  * Licensed under the Creative Commons Attribution 2.5 License - http://creativecommons.org/licenses/by/2.5/
@@ -11,12 +11,10 @@
  * ## Classes
  * CanvasImage
  * ## Functions
- * getDominantColor()
- * createPalette()
- * getAverageRGB()
+ * getColor()
+ * getPalette()
  * createAreaBasedPalette()
  *
- * Requires jquery and quantize.js.
  */
 
 
@@ -27,17 +25,29 @@
   with a set of helper functions.
 */
 
-var Canvas = require('canvas')
-var quantize = require('./libs/quantize.js')
+var MMCQ = require('./MMCQ');
+var Canvas = require('canvas');
+var Image = Canvas.Image;
 
-var CanvasImage = function (img) {
-    this.canvas = new Canvas(img.width, img.height)
-    this.context = this.canvas.getContext('2d')
+var CanvasImage = function(filename) {
+  var img, self;
 
-    this.width = img.width;
-    this.height = img.height;
+  self = this;
+  img = new Image;
 
-    this.context.drawImage(img, 0, 0, this.width, this.height);
+  img.onerror = function(err) {
+    throw err;
+  };
+
+  img.onload = function() {
+    self.canvas = new Canvas(img.width, img.height);
+    self.width = img.width;
+    self.height = img.height;
+    self.context = self.canvas.getContext('2d');
+    self.context.drawImage(img, 0, 0, img.width, img.height);
+  };
+
+  img.src = filename;
 };
 
 CanvasImage.prototype.clear = function () {
@@ -62,40 +72,53 @@ CanvasImage.prototype.removeCanvas = function () {
 
 
 /*
- * getDominantColor(sourceImage)
+ * getDominantColor(sourceImageFilename)
  * returns {r: num, g: num, b: num}
  *
  * Use the median cut algorithm provided by quantize.js to cluster similar
  * colors and return the base color from the largest cluster. */
-function getDominantColor(sourceImage) {
-
-    var palette = createPalette(sourceImage, 5);
-    var dominant = palette[0];
-
-    return dominant;
+function getColor(sourceImage, quality) {
+    var palette       = getPalette(sourceImage, 5, quality);
+    var dominantColor = palette[0];
+    return dominantColor;
 }
 
 
 /*
- * createPalette(sourceImage, colorCount)
+ * getPalette(sourceImage[, colorCount, quality])
  * returns array[ {r: num, g: num, b: num}, {r: num, g: num, b: num}, ...]
  *
- * Use the median cut algorithm provided by quantize.js to cluster similar
- * colors.
+ * Use the median cut algorithm provided by quantize.js to cluster similar colors.
+ *
+ * colorCount determines the size of the palette; the number of colors returned. If not set, it
+ * defaults to 10.
  *
  * BUGGY: Function does not always return the requested amount of colors. It can be +/- 2.
+ *
+ * quality is an optional argument. It needs to be an integer. 0 is the highest quality settings.
+ * 10 is the default. There is a trade-off between quality and speed. The bigger the number, the
+ * faster the palette generation but the greater the likelihood that colors will be missed.
+ *
+ *
  */
-function createPalette(sourceImage, colorCount) {
+function getPalette(sourceImageFilename, colorCount, quality ) {
 
-    // Create custom CanvasImage object
-    var image = new CanvasImage(sourceImage),
+    if (typeof colorCount === 'undefined') {
+        colorCount = 10;
+    }
+    if (typeof quality === 'undefined') {
+        quality = 10;
+    }
+
+  // Create custom CanvasImage object
+    var image = new CanvasImage(sourceImageFilename),
         imageData = image.getImageData(),
         pixels = imageData.data,
         pixelCount = image.getPixelCount();
 
     // Store the RGB values in an array format suitable for quantize function
     var pixelArray = [];
-    for (var i = 0, offset, r, g, b, a; i < pixelCount; i++) {
+    for (var i = 0, offset, r, g, b, a; i < pixelCount; i = i + quality) {
         offset = i * 4;
         r = pixels[offset + 0];
         g = pixels[offset + 1];
@@ -111,64 +134,18 @@ function createPalette(sourceImage, colorCount) {
 
     // Send array to quantize function which clusters values
     // using median cut algorithm
-
-    var cmap = quantize(pixelArray, colorCount);
+    var cmap    = MMCQ.quantize(pixelArray, colorCount);
     var palette = cmap.palette();
 
     // Clean up
     image.removeCanvas();
 
     return palette;
-
 }
 
 
 /*
- * getAverageRGB(sourceImage)
- * returns {r: num, g: num, b: num}
- *
- * Add up all pixels RGB values and return average.
- * Tends to return muddy gray/brown color. Most likely, you'll be better
- * off using getDominantColor() instead.
- */
-function getAverageRGB(sourceImage) {
-    // Config
-    var sampleSize = 10;
-
-    // Create custom CanvasImage object
-    var image = new CanvasImage(sourceImage),
-        imageData = image.getImageData(),
-        pixels = imageData.data,
-        pixelCount = image.getPixelCount();
-
-    // Reset vars
-    var i = 0,
-        count = 0,
-        rgb = {r:0, g:0, b:0};
-
-    // Loop through every # pixels. (# is set in Config above via the blockSize var)
-    // Add all the red values together, repeat for blue and green.
-    // Last step, divide by the number of pixels checked to get average.
-    while ( (i += sampleSize * 4) < pixelCount ) {
-        // if pixel is mostly opaque
-        if (pixels[i+3] > 125) {
-            ++count;
-            rgb.r += pixels[i];
-            rgb.g += pixels[i+1];
-            rgb.b += pixels[i+2];
-        }
-    }
-
-    rgb.r = ~~(rgb.r/count);
-    rgb.g = ~~(rgb.g/count);
-    rgb.b = ~~(rgb.b/count);
-
-    return rgb;
-}
-
-
-/*
- * createAreaBasedPalette(sourceImage, colorCount)
+ * createAreaBasedPalette(sourceImageFilename, colorCount)
  * returns array[ {r: num, g: num, b: num}, {r: num, g: num, b: num}, ...]
  *
  * Break the image into sections. Loops through pixel RGBS in the section and average color.
@@ -177,12 +154,12 @@ function getAverageRGB(sourceImage) {
  * BUGGY: Function does not always return the requested amount of colors. It can be +/- 2.
  *
  */
-function createAreaBasedPalette(sourceImage, colorCount) {
+function createAreaBasedPalette(sourceImageFilename, colorCount) {
 
     var palette = [];
 
     // Create custom CanvasImage object
-    var image = new CanvasImage(sourceImage),
+    var image = new CanvasImage(sourceImageFilename),
         imageData = image.getImageData(),
         pixels = imageData.data,
         pixelCount = image.getPixelCount();
@@ -226,5 +203,6 @@ function createAreaBasedPalette(sourceImage, colorCount) {
     return palette;
 }
 
-module.exports.getDominantColor = getDominantColor
-module.exports.createPalette = createPalette
+
+module.exports.getColor = getColor;
+module.exports.getPalette = getPalette;
